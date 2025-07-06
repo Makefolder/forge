@@ -21,7 +21,7 @@ It monitors Git repositories and automatically redeploys containers upon detecti
 Before running Forge, make sure you have Docker installed on your VPS and a Dockerfile in your repository.  
 Your projects **must** contain `Dockerfile` in its root directory
 
-## Configuration File ⚙️
+## Configuration File 🔧
 
 The configuration file can be generated using the following command:
 
