@@ -6,13 +6,20 @@
 
 # Forge 🔥
 
-Forge is an automated Docker container deployment tool designed for VPS environments. It monitors Git repositories and automatically redeploys containers upon detecting new commits.
+Forge is an automated Docker container deployment tool designed for VPS environments.
+It monitors Git repositories and automatically redeploys containers upon detecting new commits.
 
 ## Table of Contents 🗃️
+
 - [Configuration File](#configuration-file-)
 - [How to Run](#how-to-run-)
 - [Logs](#logs-)
 - [Developer Notes](#dev-)
+
+## Prerequisites
+
+Before running Forge, make sure you have Docker installed on your VPS and a Dockerfile in your repository.  
+Your projects **must** contain `Dockerfile` in its root directory
 
 ## Configuration File ⚙️
 
@@ -22,7 +29,11 @@ The configuration file can be generated using the following command:
 forge -g -d <directory>
 ```
 
-The `directory` parameter can be either global or relative. Note that only `~/` is supported; `./` is not supported.
+### Note on Directory Paths
+
+- The directory parameter can be either global or relative.
+- Both `~/` and `./` are supported in the input.
+- In the configuration file, use only the `global path` or paths that start with `~/`.
 
 ## How to Run 🐉
 
@@ -33,20 +44,31 @@ ACCESS_TOKEN="your-access-token" forge -d <directory>
 ```
 
 The `access-token` must be from one of the supported platforms:
+
 - GitHub
 - GitLab
 
 ## Logs 🪵
 
 Logs are stored in files within the specified directory. Valid types for logs are:
-- `json`
+
 - `text` (default)
+- `json`
 
 You can specify the log type in the Forge arguments as follows:
 
 ```sh
 forge -fmt <type> -d <directory>
 ```
+
+### Log Levels
+
+Log level can be specified as ENV Variable (case insensitive). Here are the options:
+
+- `INFO`
+- `DEBUG`
+- `WARN`
+- `ERROR` - default option
 
 ## Dev 🧑🏻‍💻
 

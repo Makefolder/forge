@@ -19,7 +19,6 @@ package github
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -28,8 +27,6 @@ import (
 	"smithery/forge/internal/common"
 	"strings"
 )
-
-var errUnimplemented = errors.New("Unimplemented")
 
 type GitHubClient struct {
 	git.Git
@@ -40,15 +37,15 @@ type GitHubClient struct {
 	httpclient  *httpclient.HttpClient
 }
 
-func New(repository *url.URL, accessToken string, httpclient *httpclient.HttpClient) git.IGitClient {
-	if repository == nil {
-		panic("Repository URL cannot be nil")
+func New(params git.GitClientParams) (git.IGitClient, error) {
+	if err := git.ValidateParams(params); err != nil {
+		return nil, err
 	}
 
-	repoPath := strings.TrimPrefix(repository.Path, "/")
+	repoPath := strings.TrimPrefix(params.Repository.Path, "/")
 	s := strings.Split(repoPath, "/")
 	if len(s) != 2 {
-		panic("Invalid repository URL")
+		return nil, git.ErrInvalidRepoURL
 	}
 
 	base := url.URL{
@@ -58,11 +55,11 @@ func New(repository *url.URL, accessToken string, httpclient *httpclient.HttpCli
 
 	return &GitHubClient{
 		base:        &base,
-		accessToken: accessToken,
+		accessToken: params.AccessToken,
 		author:      s[0],
 		repo:        s[1],
-		httpclient:  httpclient,
-	}
+		httpclient:  params.HttpClient,
+	}, nil
 }
 
 func (gh *GitHubClient) Ping(ctx context.Context) error {
@@ -73,7 +70,7 @@ func (gh *GitHubClient) Ping(ctx context.Context) error {
 
 	defer res.Body.Close()
 	if !common.IsOK(res) {
-		return errors.New("API response was not OK")
+		return fmt.Errorf("api response was %s", res.Status)
 	}
 	return nil
 }
@@ -90,7 +87,7 @@ func (gh *GitHubClient) GetRepository(ctx context.Context) (*git.Repository, err
 
 	defer res.Body.Close()
 	if !common.IsOK(res) {
-		return nil, errors.New("API response was not OK")
+		return nil, fmt.Errorf("api response was %s", res.Status)
 	}
 
 	data, err := io.ReadAll(res.Body)
@@ -108,3 +105,7 @@ func (gh *GitHubClient) GetRepository(ctx context.Context) (*git.Repository, err
 func (gh *GitHubClient) GetRawRepoURL() string {
 	return fmt.Sprintf("https://github.com/%s/%s", gh.author, gh.repo)
 }
+
+func (gh *GitHubClient) GetAccessToken() string { return gh.accessToken }
+func (gh *GitHubClient) GetRepoName() string    { return gh.repo }
+func (gh *GitHubClient) GetRepoAuthor() string  { return gh.author }

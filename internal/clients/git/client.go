@@ -18,33 +18,86 @@ package git
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/url"
 	"os"
+	"smithery/forge/internal/clients/httpclient"
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
+)
+
+var (
+	ErrNilRepoURL       = errors.New("repository URL cannot be nil")
+	ErrNilHttpClient    = errors.New("HTTP client cannot be nil")
+	ErrEmptyAccessToken = errors.New("access token cannot be empty")
+	ErrInvalidRepoURL   = errors.New("invalid repository URL")
 )
 
 type IGitClient interface {
 	Ping(context.Context) error
 	GetRepository(context.Context) (*Repository, error)
-	Clone(ctx context.Context, cloneDir, repoURL string) error
+	Clone(ctx context.Context, cloneDir, repoURL, accessToken string) error
 	GetRawRepoURL() string
+	GetRepoName() string
+	GetRepoAuthor() string
+	GetAccessToken() string
+}
+
+type GitClientParams struct {
+	Repository  *url.URL
+	AccessToken string
+	HttpClient  *httpclient.HttpClient
 }
 
 type Git struct{}
 
-func (g *Git) Clone(ctx context.Context, cloneDir, repoURL string) error {
-	slog.Info("Clonning repository", "clone_dir", cloneDir, "repo_url", repoURL)
+func (g *Git) Clone(ctx context.Context, cloneDir, accessToken, repoURL string) error {
+	if accessToken == "" {
+		return errors.New("access token cannot be empty")
+	}
+
+	if cloneDir == "" {
+		return errors.New("clone dir cannot be empty")
+	}
+
+	if repoURL == "" {
+		return errors.New("repo url cannot be empty")
+	}
+
+	slog.Info("clonning repository", "clone_dir", cloneDir, "repo_url", repoURL)
+	auth := &http.BasicAuth{
+		Username: "bearer",
+		Password: accessToken,
+	}
+
 	repo, err := git.PlainCloneContext(ctx, cloneDir, false, &git.CloneOptions{
+		Auth:     auth,
 		URL:      repoURL,
 		Progress: os.Stdout,
 	})
 	if err != nil {
 		return err
 	}
-	slog.Info("Cloned repository successfully",
+	slog.Info("repository cloned successfully",
 		"clone_dir", cloneDir, "repo_url", repoURL, "repository", repo)
+	return nil
+}
+
+func ValidateParams(params GitClientParams) error {
+	if params.Repository == nil {
+		return ErrNilRepoURL
+	}
+
+	if params.HttpClient == nil {
+		return ErrNilHttpClient
+	}
+
+	if params.AccessToken == "" {
+		return ErrEmptyAccessToken
+	}
 	return nil
 }
 

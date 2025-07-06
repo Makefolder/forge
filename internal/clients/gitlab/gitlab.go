@@ -26,7 +26,7 @@ import (
 	"strings"
 )
 
-var errUnimplemented = errors.New("Unimplemented")
+var errUnimplemented = errors.New("unimplemented")
 
 type GitLabClient struct {
 	git.Git
@@ -37,15 +37,15 @@ type GitLabClient struct {
 	httpclient  *httpclient.HttpClient
 }
 
-func New(repository *url.URL, accessToken string, httpclient *httpclient.HttpClient) git.IGitClient {
-	if repository == nil {
-		panic("Repository URL cannot be nil")
+func New(params git.GitClientParams) (git.IGitClient, error) {
+	if err := git.ValidateParams(params); err != nil {
+		return nil, err
 	}
 
-	repoPath := strings.TrimPrefix(repository.Path, "/")
+	repoPath := strings.TrimPrefix(params.Repository.Path, "/")
 	s := strings.Split(repoPath, "/")
 	if len(s) != 2 {
-		panic("Invalid repository URL")
+		return nil, git.ErrInvalidRepoURL
 	}
 
 	base := url.URL{
@@ -55,11 +55,11 @@ func New(repository *url.URL, accessToken string, httpclient *httpclient.HttpCli
 
 	return &GitLabClient{
 		base:        &base,
-		accessToken: accessToken,
+		accessToken: params.AccessToken,
 		author:      s[0],
 		repo:        s[1],
-		httpclient:  httpclient,
-	}
+		httpclient:  params.HttpClient,
+	}, nil
 }
 
 func (gl *GitLabClient) Ping(_ context.Context) error {
@@ -73,3 +73,7 @@ func (gl *GitLabClient) GetRepository(_ context.Context) (*git.Repository, error
 func (gl *GitLabClient) GetRawRepoURL() string {
 	return fmt.Sprintf("https://gitlab.com/%s/%s", gl.author, gl.repo)
 }
+
+func (gl *GitLabClient) GetAccessToken() string { return gl.accessToken }
+func (gl *GitLabClient) GetRepoName() string    { return gl.repo }
+func (gl *GitLabClient) GetRepoAuthor() string  { return gl.author }

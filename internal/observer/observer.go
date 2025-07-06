@@ -22,8 +22,11 @@ import (
 	"log/slog"
 	"net/url"
 	"smithery/forge/internal/clients/git"
+	"sync"
 	"time"
 )
+
+const CONCURRENCY_THRESHOLD = 12
 
 var lastPushed time.Time = time.Now()
 
@@ -52,33 +55,62 @@ func New(params ObserverParams) IObserver {
 }
 
 func (o *Observer) Observe(ctx context.Context, u *url.URL) error {
+	slog.Debug("observe triggered")
 	if u == nil {
 		return errors.New("URL cannot be nil")
 	}
+	slog.Debug("observing...")
 	for {
 		select {
 		case <-ctx.Done():
+			slog.Debug("ctx done triggered")
 			return nil
 		default:
+			slog.Debug("default case triggered")
 			r, err := o.git.GetRepository(ctx)
 			if err != nil {
 				return err
 			}
 			if r.PushedAt.After(lastPushed) {
-				o.notify(ctx)
+				slog.Debug("push triggered; notifying...",
+					"pushed_at", r.PushedAt.Format(time.DateTime),
+					"last_pushed", lastPushed.Format(time.DateTime),
+				)
+				if len(o.subscriptions) >= CONCURRENCY_THRESHOLD {
+					o.notifyThreaded(ctx)
+				} else {
+					o.notifySequentially(ctx)
+				}
+				lastPushed = r.PushedAt
+				slog.Debug("notification finished")
 			}
 			time.Sleep(o.interval)
 		}
 	}
 }
 
-func (o *Observer) notify(ctx context.Context) {
-	if len(o.subscriptions) == 0 {
-		return
+func (o *Observer) notifyThreaded(ctx context.Context) {
+	var wg sync.WaitGroup
+	wg.Add(len(o.subscriptions))
+	for idx, sub := range o.subscriptions {
+		go func() {
+			if err := sub(ctx); err != nil {
+				slog.Error("failed to notify", slog.Int("idx", idx), "error", err)
+				return
+			}
+			slog.Debug("notified", slog.Int("idx", idx))
+			wg.Done()
+		}()
 	}
+	wg.Wait()
+}
+
+func (o *Observer) notifySequentially(ctx context.Context) {
 	for idx, sub := range o.subscriptions {
 		if err := sub(ctx); err != nil {
-			slog.Error("Failed to notify", slog.Int("idx", idx), "error", err)
+			slog.Error("failed to notify", slog.Int("idx", idx), "error", err)
+			continue
 		}
+		slog.Debug("notified", slog.Int("idx", idx))
 	}
 }

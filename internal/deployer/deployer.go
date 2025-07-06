@@ -18,7 +18,12 @@ package deployer
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
 	"smithery/forge/internal/clients/git"
+	"smithery/forge/internal/common"
 )
 
 type IDeployer interface {
@@ -30,6 +35,8 @@ type Deployer struct {
 	cloneDir string
 }
 
+var ErrDockerfileNotExist = errors.New("dockerfile is not in the project's root directory")
+
 func New(cloneDir string, git git.IGitClient) IDeployer {
 	return &Deployer{
 		cloneDir: cloneDir,
@@ -38,5 +45,36 @@ func New(cloneDir string, git git.IGitClient) IDeployer {
 }
 
 func (d *Deployer) Deploy(ctx context.Context) error {
-	return d.git.Clone(ctx, d.cloneDir, d.git.GetRawRepoURL())
+	slog.Debug("deploy triggered")
+	isEmpty, err := common.IsDirEmpty(d.cloneDir)
+	if err != nil {
+		return err
+	}
+	if !isEmpty {
+		if err := common.CleanDir(d.cloneDir); err != nil {
+			return err
+		}
+		slog.Debug("directory emptied", "clone_dir", d.cloneDir)
+	}
+
+	// step 1: clone repo
+	accessToken := d.git.GetAccessToken()
+	repo := d.git.GetRawRepoURL()
+	if err := d.git.Clone(ctx, d.cloneDir, accessToken, repo); err != nil {
+		return err
+	}
+
+	// step 2: check if there's dockerfile
+	dockerfilePath := fmt.Sprintf("%s/%s/Dockerfile", d.cloneDir, d.git.GetRepoName())
+	_, err = os.Stat(dockerfilePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return ErrDockerfileNotExist
+	} else if err != nil {
+		return fmt.Errorf("failed to check for Dockerfile: %w", err)
+	}
+
+	// step 3: build dockerfile
+	// step 4: create service file
+
+	return nil
 }

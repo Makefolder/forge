@@ -65,9 +65,11 @@ type httpConfig struct {
 
 func configFileDefaults() *configFile {
 	cfg := configFile{}
-	cfg.Config.Repository = "https://github.com/makefolder"
-	cfg.Config.LogOutputDir = "~/.forge"
+	cfg.Config.Repository = "https://github.com/makefolder/forge"
+	cfg.Config.Git.CloneDir = "~/.forge/clone_dir"
+	cfg.Config.LogOutputDir = "~/.forge/logs"
 	cfg.Config.Observer.Interval = 30 // 30 seconds
+	cfg.Config.HttpClient.Timeout = 2 // 2 seconds
 	return &cfg
 }
 

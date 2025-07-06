@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -27,11 +28,14 @@ import (
 	"smithery/forge/internal/clients/github"
 	"smithery/forge/internal/clients/gitlab"
 	"smithery/forge/internal/clients/httpclient"
+	"smithery/forge/internal/common"
 	"smithery/forge/internal/config"
 	"smithery/forge/internal/deployer"
 	"smithery/forge/internal/observer"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -40,7 +44,27 @@ const (
 	LOG_FMT_JSON     = "json"
 )
 
+func init() {
+	var isDev bool
+	env := os.Getenv("ENV")
+	isDev = env != "" && strings.ToLower(env) == "dev"
+
+	if !isDev {
+		return
+	}
+
+	if err := godotenv.Load(); err != nil {
+		panic(fmt.Errorf("Failed to load .env file: %v", err))
+	}
+}
+
 func main() {
+	if err := run(); err != nil {
+		panic(err)
+	}
+}
+
+func run() error {
 	// config init
 	var (
 		isConfigGenerate bool
@@ -55,24 +79,31 @@ func main() {
 	flag.Parse()
 
 	if isConfigGenerate && dir == UNSPECIFIED_PATH {
-		panic("Cannot generate config.yaml: no target path specified")
+		return errors.New("cannot generate config.yaml: no target path specified")
 	} else if isConfigGenerate {
 		err := config.Generate(dir)
 		if err != nil {
-			msg := fmt.Errorf("Failed to generate config: %w", err)
-			panic(msg)
+			return fmt.Errorf("failed to generate config: %w", err)
 		}
-		return
+		return nil
 	}
 
 	if dir == UNSPECIFIED_PATH {
-		panic("No config file specified")
+		return errors.New("No config file specified")
 	}
 	cfg := config.MustParse(dir)
 
+	// init directories
+	mustInitDir(cfg.LogOutputDir, cfg.CloneDir)
+
 	// slog setup
+	logLevel, err := mapLogLevel(os.Getenv("LOG_LEVEL"))
+	if err != nil {
+		return err
+	}
+
 	opts := slog.HandlerOptions{
-		Level:     slog.LevelDebug,
+		Level:     logLevel,
 		AddSource: true,
 	}
 
@@ -80,7 +111,7 @@ func main() {
 	filePath := fmt.Sprintf("%s/%s", cfg.LogOutputDir, logName)
 	logFile, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
-		panic(fmt.Errorf("Failed to write to log file: %w", err))
+		return fmt.Errorf("failed to write to log file: %w", err)
 	}
 	defer logFile.Close()
 
@@ -93,39 +124,101 @@ func main() {
 
 	logger := slog.New(slogHandler)
 	slog.SetDefault(logger)
+	slog.Debug("slog initialised")
 
 	// http client init
 	ctx := context.Background()
 	httpclient := httpclient.New(cfg.HTTPTimeout * time.Second)
+	slog.Debug("http client initialised")
 
 	// git init
+	gitParams := git.GitClientParams{
+		Repository:  cfg.Repository,
+		AccessToken: cfg.AccessToken,
+		HttpClient:  httpclient,
+	}
+
 	var git git.IGitClient
 	switch cfg.Repository.Hostname() {
 	case config.GITHUB_HOST:
-		git = github.New(cfg.Repository, cfg.AccessToken, httpclient)
+		git, err = github.New(gitParams)
 	case config.GITLAB_HOST:
-		git = gitlab.New(cfg.Repository, cfg.AccessToken, httpclient)
+		git, err = gitlab.New(gitParams)
 	default:
-		panic(fmt.Sprintf("git client is not specified for host %s", cfg.Repository.Hostname()))
+		return fmt.Errorf("git client is not specified for host %s", cfg.Repository.Hostname())
+	}
+	if err != nil {
+		return err
 	}
 	if err := git.Ping(ctx); err != nil {
-		panic(fmt.Errorf("Failed to ping repository: %w", err))
+		return fmt.Errorf("failed to ping repository: %w", err)
 	}
+	slog.Debug("git client initialised")
 
 	// deployer init
-	d := deployer.New(git.GetRawRepoURL(), git)
+	d := deployer.New(cfg.CloneDir, git)
+	slog.Debug("deployer initialised")
+
+	isEmpty, err := common.IsDirEmpty(cfg.CloneDir)
+	if err != nil {
+		return fmt.Errorf("failed to check whether the dir (%s) is empty: %w", cfg.CloneDir, err)
+	}
+
+	if isEmpty {
+		slog.Debug("clone dir is empty")
+		err := d.Deploy(ctx)
+		if errors.Is(err, deployer.ErrDockerfileNotExist) {
+			slog.Warn("failed initial repo cloning", "error", err.Error())
+		} else if err != nil {
+			return fmt.Errorf("failed initial repo cloning: %w", err)
+		}
+	}
 
 	// observer init & observe
 	params := observer.ObserverParams{
 		Git:      git,
-		Interval: time.Duration(cfg.ObserverInterval),
+		Interval: time.Duration(cfg.ObserverInterval) * time.Second,
 		Subscriptions: []func(context.Context) error{
 			d.Deploy,
 		},
 	}
 
 	o := observer.New(params)
+	slog.Debug("observer created",
+		slog.String("git_repository", params.Git.GetRawRepoURL()),
+		slog.Int("interval", int(cfg.ObserverInterval)),
+		slog.Int("subscription_length", len(params.Subscriptions)),
+	)
 	if err := o.Observe(ctx, cfg.Repository); err != nil {
-		panic(fmt.Errorf("Failed to observe: %w", err))
+		return fmt.Errorf("failed to observe: %w", err)
 	}
+
+	return nil
+}
+
+func mustInitDir(dirs ...string) {
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			panic(fmt.Errorf("failed to init directory (%s): %w", dir, err))
+		}
+	}
+}
+
+func mapLogLevel(env string) (slog.Level, error) {
+	if env == "" {
+		return slog.LevelError, nil
+	}
+
+	switch strings.ToLower(env) {
+	case "info":
+		return slog.LevelInfo, nil
+	case "debug":
+		return slog.LevelDebug, nil
+	case "warn":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	}
+
+	return 0, fmt.Errorf("invalid slog level option (%s)", env)
 }

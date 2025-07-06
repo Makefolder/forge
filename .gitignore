@@ -1,3 +1,6 @@
+# Forge config file
+default.yaml
+
 # Environment
 .env
 

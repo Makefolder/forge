@@ -1,7 +1,5 @@
-TOKEN='YOUR-TOKEN-HERE'
-
 start:
-	@ACCESS_TOKEN=$(TOKEN) go run ./cmd -d ./default.yaml
+	@ENV="DEV" LOG_LEVEL="DEBUG" go run ./cmd -d ./default.yaml
 
 tidy:
 	@go mod tidy
