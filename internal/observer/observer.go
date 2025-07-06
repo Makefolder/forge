@@ -26,8 +26,6 @@ import (
 	"time"
 )
 
-const CONCURRENCY_THRESHOLD = 12
-
 var lastPushed time.Time = time.Now()
 
 type IObserver interface {
@@ -76,11 +74,7 @@ func (o *Observer) Observe(ctx context.Context, u *url.URL) error {
 					"pushed_at", r.PushedAt.Format(time.DateTime),
 					"last_pushed", lastPushed.Format(time.DateTime),
 				)
-				if len(o.subscriptions) >= CONCURRENCY_THRESHOLD {
-					o.notifyThreaded(ctx)
-				} else {
-					o.notifySequentially(ctx)
-				}
+				o.notify(ctx)
 				lastPushed = r.PushedAt
 				slog.Debug("notification finished")
 			}
@@ -89,7 +83,7 @@ func (o *Observer) Observe(ctx context.Context, u *url.URL) error {
 	}
 }
 
-func (o *Observer) notifyThreaded(ctx context.Context) {
+func (o *Observer) notify(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Add(len(o.subscriptions))
 	for idx, sub := range o.subscriptions {
@@ -103,14 +97,4 @@ func (o *Observer) notifyThreaded(ctx context.Context) {
 		}()
 	}
 	wg.Wait()
-}
-
-func (o *Observer) notifySequentially(ctx context.Context) {
-	for idx, sub := range o.subscriptions {
-		if err := sub(ctx); err != nil {
-			slog.Error("failed to notify", slog.Int("idx", idx), "error", err)
-			continue
-		}
-		slog.Debug("notified", slog.Int("idx", idx))
-	}
 }

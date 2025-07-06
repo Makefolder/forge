@@ -67,7 +67,7 @@ func (g *Git) Clone(ctx context.Context, cloneDir, accessToken, repoURL string) 
 		return errors.New("repo url cannot be empty")
 	}
 
-	slog.Info("clonning repository", "clone_dir", cloneDir, "repo_url", repoURL)
+	slog.Info("cloning repository", "clone_dir", cloneDir, "repo_url", repoURL)
 	auth := &http.BasicAuth{
 		Username: "bearer",
 		Password: accessToken,

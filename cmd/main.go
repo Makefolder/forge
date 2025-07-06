@@ -73,7 +73,7 @@ func run() error {
 		slogHandler      slog.Handler
 	)
 
-	flag.BoolVar(&isConfigGenerate, "g", false, "generate config.yaml (should be used with '-d')")
+	flag.BoolVar(&isConfigGenerate, "g", false, "generate config.yaml (must be used with '-d')")
 	flag.StringVar(&dir, "d", UNSPECIFIED_PATH, "directory to config.yaml")
 	flag.StringVar(&logFmt, "fmt", LOG_FMT_TEXT, "log format (json/text; default: text)")
 	flag.Parse()
@@ -156,7 +156,7 @@ func run() error {
 	slog.Debug("git client initialised")
 
 	// deployer init
-	d := deployer.New(cfg.CloneDir, git)
+	d := deployer.New(w, cfg.CloneDir, git)
 	slog.Debug("deployer initialised")
 
 	isEmpty, err := common.IsDirEmpty(cfg.CloneDir)

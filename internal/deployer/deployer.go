@@ -20,8 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"smithery/forge/internal/clients/git"
 	"smithery/forge/internal/common"
 )
@@ -33,14 +35,16 @@ type IDeployer interface {
 type Deployer struct {
 	git      git.IGitClient
 	cloneDir string
+	stdout   io.Writer
 }
 
 var ErrDockerfileNotExist = errors.New("dockerfile is not in the project's root directory")
 
-func New(cloneDir string, git git.IGitClient) IDeployer {
+func New(stdout io.Writer, cloneDir string, git git.IGitClient) IDeployer {
 	return &Deployer{
 		cloneDir: cloneDir,
 		git:      git,
+		stdout:   stdout,
 	}
 }
 
@@ -65,7 +69,8 @@ func (d *Deployer) Deploy(ctx context.Context) error {
 	}
 
 	// step 2: check if there's dockerfile
-	dockerfilePath := fmt.Sprintf("%s/%s/Dockerfile", d.cloneDir, d.git.GetRepoName())
+	dockerfilePath := fmt.Sprintf("%s/Dockerfile", d.cloneDir)
+	slog.Debug("dockerfile path", "path", dockerfilePath)
 	_, err = os.Stat(dockerfilePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return ErrDockerfileNotExist
@@ -74,7 +79,16 @@ func (d *Deployer) Deploy(ctx context.Context) error {
 	}
 
 	// step 3: build dockerfile
-	// step 4: create service file
+	slog.Info("building dockerfile")
+	cmd := exec.Command(
+		"docker", "build", "-f", dockerfilePath, "-t", d.git.GetRepoName(), d.cloneDir)
+	cmd.Stdout = d.stdout
 
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// step 4: create service file
+	// step 5: start the container
 	return nil
 }
