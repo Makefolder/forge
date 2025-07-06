@@ -1,57 +1,57 @@
-# Forge
+<div align="left">
+  <img src="https://img.shields.io/badge/golang-242424?logo=go&style=for-the-badge&logoColor=00ADD8"/>
+  <img src="https://img.shields.io/badge/github-242424?logo=github&style=for-the-badge&logoColor=ffffff"/>
+  <img src="https://img.shields.io/badge/gitlab-242424?logo=gitlab&style=for-the-badge&logoColor=FC6D26"/>
+</div>
 
-Forge - Automated Docker container deployment tool for VPS environments.  
-Monitors Git repositories and redeploys containers on new commits.
+# Forge 🔥
 
-## Configuration file
+Forge is an automated Docker container deployment tool designed for VPS environments. It monitors Git repositories and automatically redeploys containers upon detecting new commits.
 
-The configuration file can be generated with the following command
+## Table of Contents 🗃️
+- [Configuration File](#configuration-file-)
+- [How to Run](#how-to-run-)
+- [Logs](#logs-)
+- [Developer Notes](#dev-)
+
+## Configuration File ⚙️
+
+The configuration file can be generated using the following command:
 
 ```sh
 forge -g -d <directory>
 ```
 
-The `directory` can either be global or relative (only `~/`; `./` is unsupported).
+The `directory` parameter can be either global or relative. Note that only `~/` is supported; `./` is not supported.
 
-## How to run
+## How to Run 🐉
 
-Once you have generated and configured the `.yaml` file, it's about the time
-to get the thing up & running which can be done with this command:
+After generating and configuring the `.yaml` file, you can start Forge with the following command:
 
 ```sh
 ACCESS_TOKEN="your-access-token" forge -d <directory>
 ```
 
-The `access-token` must be of one of the supported platforms which are:
-
+The `access-token` must be from one of the supported platforms:
 - GitHub
 - GitLab
 
-## Logs
+## Logs 🪵
 
-Logs are being stored in files in the specified directory.
-There're two types of logs:
+Logs are stored in files within the specified directory. Valid types for logs are:
+- `json`
+- `text` (default)
 
-- TEXT
-- JSON
-
-The type can be specified in the forge arguments like this:
+You can specify the log type in the Forge arguments as follows:
 
 ```sh
 forge -fmt <type> -d <directory>
 ```
 
-Valid types:
+## Dev 🧑🏻‍💻
 
-- `json`
-- `text` - the default one
+This section contains notes for developers about the project structure.
 
-## Dev
+### Patterns Used 🖇️
 
-This section contains developer notes about the project structure.
-
-### Patterns used
-
-This project uses "Observer pattern". It is monitoring repository. Once changes found,
-the Observer notifies deployer structure which does everything else.
-
+This project utilises the Observer pattern. It monitors the repository, and once changes are detected, the Observer notifies the Deployer module, which handles the rest of the process.
