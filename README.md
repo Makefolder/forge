@@ -16,6 +16,7 @@ It monitors Git repositories and automatically redeploys containers upon detecti
 - [How to Run](#how-to-run-)
 - [Logs](#logs-)
 - [Developer Notes](#dev-)
+- [Project Goals](#project-goals-)
 
 ## Prerequisites
 
@@ -79,7 +80,9 @@ This section contains notes for developers about the project structure.
 
 This project utilises the Observer pattern. It monitors the repository, and once changes are detected, the Observer notifies the Deployer module, which handles the rest of the process.  
 
-## Goal
+## Project Goals 🎯
+
+The final architecture of the project is designed as follows:
 
 ```mermaid
 flowchart TD
@@ -105,3 +108,5 @@ flowchart TD
     DC --> DP
     DF --> DP
 ```
+
+Currently, the `Deploy()` functionality using Dockerfile has been implemented. Future plans include extending the functionality to incorporate additional features and deployment methods.
