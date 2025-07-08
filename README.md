@@ -79,7 +79,7 @@ This section contains notes for developers about the project structure.
 
 This project utilises the Observer pattern. It monitors the repository, and once changes are detected, the Observer notifies the Deployer module, which handles the rest of the process.  
 
-## Future plans
+## Goal
 
 ```mermaid
 flowchart TD
