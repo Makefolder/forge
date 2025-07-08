@@ -77,7 +77,7 @@ Log level can be specified as ENV Variable (case insensitive). Here are the opti
 
 This section contains notes for developers about the project structure.
 
-### Patterns Used 🖇️
+### Patterns Used
 
 This project utilises the Observer pattern. It monitors the repository, and once changes are detected, the Observer notifies the Deployer module, which handles the rest of the process.  
 
@@ -86,6 +86,11 @@ This project utilises the Observer pattern. It monitors the repository, and once
 The final architecture of the project is designed as follows:
 
 ```mermaid
+---
+config:
+  theme: redux
+  layout: elk
+---
 flowchart TD
  subgraph INotifier["INotifier"]
         S("Slack")
