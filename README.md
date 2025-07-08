@@ -3,6 +3,7 @@
   <img src="https://img.shields.io/badge/github-242424?logo=github&style=for-the-badge&logoColor=ffffff"/>
   <img src="https://img.shields.io/badge/gitlab-242424?logo=gitlab&style=for-the-badge&logoColor=FC6D26"/>
   <img src="https://img.shields.io/badge/docker-242424?logo=docker&style=for-the-badge&logoColor=2496ED"/>
+  <img src="https://img.shields.io/badge/kubernetes-242424?logo=kubernetes&style=for-the-badge&logoColor=326CE5"/>
 </div>
 
 # Forge 🔥
