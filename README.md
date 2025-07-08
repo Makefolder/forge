@@ -77,4 +77,31 @@ This section contains notes for developers about the project structure.
 
 ### Patterns Used 🖇️
 
-This project utilises the Observer pattern. It monitors the repository, and once changes are detected, the Observer notifies the Deployer module, which handles the rest of the process.
+This project utilises the Observer pattern. It monitors the repository, and once changes are detected, the Observer notifies the Deployer module, which handles the rest of the process.  
+
+## Future plans
+
+```mermaid
+flowchart TD
+ subgraph INotifier["INotifier"]
+        S("Slack")
+        T("Telegram")
+        E("Email")
+        N["Notify()"]
+  end
+ subgraph IDeployer["IDeployer"]
+        K("Deploy Kubernetes")
+        DC("Deploy Docker compose")
+        DF("Deploy Dockerfile")
+        DP["Deploy()"]
+  end
+    S --> N
+    T --> N
+    E --> N
+    F[("Forge")] --> O(["Observer"])
+    O --> S & T & E & D("Selector")
+    D --> K & DC & DF
+    K --> DP
+    DC --> DP
+    DF --> DP
+```
