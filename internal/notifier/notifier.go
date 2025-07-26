@@ -17,5 +17,5 @@
 package notifier
 
 type INotifier interface {
-	Notify(message Message) error
+	Notify(message string) error
 }
