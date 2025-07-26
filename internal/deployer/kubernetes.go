@@ -20,10 +20,10 @@ import "context"
 
 type KubernetesDeployer struct{}
 
-func NewKubernetesDeployer() *KubernetesDeployer {
+func NewKubernetesDeployer() IDeployer {
 	return &KubernetesDeployer{}
 }
 
-func (ku *KubernetesDeployer) Deploy(ctx context.Context) error {
+func (ku *KubernetesDeployer) Deploy(ctx context.Context, params DeployParams) error {
 	return nil
 }

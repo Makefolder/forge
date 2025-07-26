@@ -20,10 +20,10 @@ import "context"
 
 type DockerComposeDeployer struct{}
 
-func NewDockerComposeDeployer() *DockerComposeDeployer {
+func NewDockerComposeDeployer() IDeployer {
 	return &DockerComposeDeployer{}
 }
 
-func (dc *DockerComposeDeployer) Deploy(ctx context.Context) error {
+func (dc *DockerComposeDeployer) Deploy(ctx context.Context, params DeployParams) error {
 	return nil
 }

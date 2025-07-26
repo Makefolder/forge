@@ -18,6 +18,10 @@ package deployer
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"slices"
+
 	"github.com/docker/docker/api/types/container"
 	"github.com/moby/moby/client"
 )
@@ -26,7 +30,7 @@ type DockerfileDeployer struct {
 	cli *client.Client
 }
 
-func NewDockerfileDeployer(cli *client.Client) *DockerfileDeployer {
+func NewDockerfileDeployer(cli *client.Client) IDeployer {
 	return &DockerfileDeployer{
 		cli: cli,
 	}
@@ -43,19 +47,67 @@ func NewDockerfileDeployer(cli *client.Client) *DockerfileDeployer {
 //   - DOCKER_TLS_VERIFY ([EnvTLSVerify]) to enable or disable TLS verification
 //     (off by default).
 
-func (df *DockerfileDeployer) Deploy(ctx context.Context) (err error) {
+func (df *DockerfileDeployer) Deploy(ctx context.Context, params DeployParams) error {
 	var containers []container.Summary
-
-	opts := container.ListOptions{}
-	containers, err = df.cli.ContainerList(ctx, opts)
+	containers, err := df.cli.ContainerList(ctx, container.ListOptions{})
 	if err != nil {
 		return err
 	}
 
-	// for _, c := range containers {
-	//     c.Names
-	//     slices.Contains(c.Names, )
-	// }
-	_ = containers
+	if err := df.safeRemoveContainer(ctx, containers, params.ContainerName); err != nil {
+		return err
+	}
+
+	res, err := df.cli.ContainerCreate(ctx, nil, nil, nil, nil, params.ContainerName)
+	if err != nil {
+		return err
+	}
+
+	if len(res.Warnings) > 0 {
+		warnMsg := fmt.Sprintf("warning occured during %s container deployment",
+			params.ContainerName)
+
+		for _, warn := range res.Warnings {
+			slog.Warn(warnMsg, "msg", warn)
+		}
+	}
+
 	return nil
+}
+
+// Removes container if exists
+func (df *DockerfileDeployer) safeRemoveContainer(
+	ctx context.Context,
+	containers []container.Summary,
+	containerName string,
+) error {
+	for _, c := range containers {
+		if slices.Contains(c.Names, containerName) {
+			if isStoppable(c.State) {
+				copts := container.StopOptions{}
+				err := df.cli.ContainerStop(ctx, c.ID, copts)
+				if err != nil {
+					return err
+				}
+			}
+			err := df.cli.ContainerRemove(ctx, c.ID, container.RemoveOptions{
+				RemoveVolumes: true,
+				RemoveLinks:   true,
+				Force:         false,
+			})
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+	return nil
+}
+
+func isStoppable(state container.ContainerState) bool {
+	switch state {
+	case container.StateRunning, container.StatePaused, container.StateRestarting:
+		return true
+	}
+	return false
 }

@@ -27,13 +27,17 @@ import (
 var ErrDockerfileNotExist = errors.New("dockerfile is not in the project's root directory")
 
 type IDeployer interface {
-	Deploy(context.Context) error
+	Deploy(context.Context, DeployParams) error
 }
 
 type DeployInvoker struct {
 	deployer IDeployer
 	git      git.IGitClient
 	cloneDir string
+}
+
+type DeployParams struct {
+	ContainerName string
 }
 
 type DIParams struct {
@@ -69,5 +73,7 @@ func (di *DeployInvoker) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	return di.deployer.Deploy(ctx)
+	return di.deployer.Deploy(ctx, DeployParams{
+		ContainerName: di.git.GetRepoName(),
+	})
 }
