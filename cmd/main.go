@@ -36,12 +36,13 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/moby/moby/client"
 )
 
 const (
-	UNSPECIFIED_PATH = ""
-	LOG_FMT_TEXT     = "text"
-	LOG_FMT_JSON     = "json"
+	unspecifiedPath = ""
+	logFmtText      = "text"
+	logFmtJSON      = "json"
 )
 
 func init() {
@@ -54,7 +55,7 @@ func init() {
 	}
 
 	if err := godotenv.Load(); err != nil {
-		panic(fmt.Errorf("Failed to load .env file: %v", err))
+		panic(fmt.Errorf("failed to load .env file: %v", err))
 	}
 }
 
@@ -74,11 +75,11 @@ func run() error {
 	)
 
 	flag.BoolVar(&isConfigGenerate, "g", false, "generate config.yaml (must be used with '-d')")
-	flag.StringVar(&dir, "d", UNSPECIFIED_PATH, "directory to config.yaml")
-	flag.StringVar(&logFmt, "fmt", LOG_FMT_TEXT, "log format (json/text; default: text)")
+	flag.StringVar(&dir, "d", unspecifiedPath, "directory to config.yaml")
+	flag.StringVar(&logFmt, "fmt", logFmtText, "log format (json/text; default: text)")
 	flag.Parse()
 
-	if isConfigGenerate && dir == UNSPECIFIED_PATH {
+	if isConfigGenerate && dir == unspecifiedPath {
 		return errors.New("cannot generate config.yaml: no target path specified")
 	} else if isConfigGenerate {
 		err := config.Generate(dir)
@@ -88,13 +89,15 @@ func run() error {
 		return nil
 	}
 
-	if dir == UNSPECIFIED_PATH {
-		return errors.New("No config file specified")
+	if dir == unspecifiedPath {
+		return errors.New("no config file specified")
 	}
 	cfg := config.MustParse(dir)
 
 	// init directories
-	mustInitDir(cfg.LogOutputDir, cfg.CloneDir)
+	if err := initDir(cfg.LogOutputDir, cfg.CloneDir); err != nil {
+		return err
+	}
 
 	// slog setup
 	logLevel, err := mapLogLevel(os.Getenv("LOG_LEVEL"))
@@ -116,7 +119,7 @@ func run() error {
 	defer logFile.Close()
 
 	w := io.MultiWriter(logFile, os.Stdout)
-	if strings.ToLower(logFmt) == LOG_FMT_JSON {
+	if strings.ToLower(logFmt) == logFmtJSON {
 		slogHandler = slog.NewJSONHandler(w, &opts)
 	} else {
 		slogHandler = slog.NewTextHandler(w, &opts)
@@ -140,15 +143,15 @@ func run() error {
 
 	var git git.IGitClient
 	switch cfg.Repository.Hostname() {
-	case config.GITHUB_HOST:
+	case config.GithubHost:
 		git, err = github.New(gitParams)
-	case config.GITLAB_HOST:
+	case config.GitlabHost:
 		git, err = gitlab.New(gitParams)
 	default:
 		return fmt.Errorf("git client is not specified for host %s", cfg.Repository.Hostname())
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialise git client: %w", err)
 	}
 	if err := git.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to ping repository: %w", err)
@@ -156,8 +159,30 @@ func run() error {
 	slog.Debug("git client initialised")
 
 	// deployer init
-	d := deployer.New(w, cfg.CloneDir, git)
-	slog.Debug("deployer initialised")
+	dockerClient, err := client.NewClientWithOpts(client.FromEnv,
+		client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("failed to initialise docker client: %w", err)
+	}
+
+	defer func() {
+		if err == nil {
+			err = dockerClient.Close()
+		}
+	}()
+
+	// todo!: Determine deployer type
+	// common.GetDeployerType()
+	d := deployer.NewDockerfileDeployer(dockerClient)
+
+	diParams := deployer.DIParams{
+		Deployer: d,
+		Git:      git,
+		CloneDir: cfg.CloneDir,
+	}
+
+	di := deployer.NewDeployInvoker(diParams)
+	slog.Debug("deploy invoker initialised")
 
 	isEmpty, err := common.IsDirEmpty(cfg.CloneDir)
 	if err != nil {
@@ -166,11 +191,12 @@ func run() error {
 
 	if isEmpty {
 		slog.Debug("clone dir is empty")
-		err := d.Deploy(ctx)
+		err := di.Deploy(ctx)
 		if errors.Is(err, deployer.ErrDockerfileNotExist) {
-			slog.Warn("failed initial repo cloning", "error", err.Error())
+			// at this point, deployment is not going to happen but notifications will be sent
+			slog.Warn("failed initial deployment", "error", err.Error())
 		} else if err != nil {
-			return fmt.Errorf("failed initial repo cloning: %w", err)
+			return fmt.Errorf("failed initial deployment: %w", err)
 		}
 	}
 
@@ -179,7 +205,7 @@ func run() error {
 		Git:      git,
 		Interval: time.Duration(cfg.ObserverInterval) * time.Second,
 		Subscriptions: []func(context.Context) error{
-			d.Deploy,
+			di.Deploy,
 		},
 	}
 
@@ -196,12 +222,13 @@ func run() error {
 	return nil
 }
 
-func mustInitDir(dirs ...string) {
+func initDir(dirs ...string) error {
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			panic(fmt.Errorf("failed to init directory (%s): %w", dir, err))
+			return fmt.Errorf("failed to init directory (%s): %w", dir, err)
 		}
 	}
+	return nil
 }
 
 func mapLogLevel(env string) (slog.Level, error) {

@@ -31,7 +31,7 @@ import (
 
 var (
 	ErrNilRepoURL       = errors.New("repository URL cannot be nil")
-	ErrNilHttpClient    = errors.New("HTTP client cannot be nil")
+	ErrNilHttpClient    = errors.New("http client cannot be nil")
 	ErrEmptyAccessToken = errors.New("access token cannot be empty")
 	ErrInvalidRepoURL   = errors.New("invalid repository URL")
 )

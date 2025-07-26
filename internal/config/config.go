@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	GITHUB_HOST = "github.com"
-	GITLAB_HOST = "gitlab.com"
+	GithubHost = "github.com"
+	GitlabHost = "gitlab.com"
 )
 
 type Config struct {
@@ -103,8 +103,8 @@ func MustParse(dir string) *Config {
 	}
 
 	switch repo.Hostname() {
-	case GITHUB_HOST:
-	case GITLAB_HOST:
+	case GithubHost:
+	case GitlabHost:
 	default:
 		panic("Invalid git host (supported: `github.com` or `gitlab.com`)")
 	}

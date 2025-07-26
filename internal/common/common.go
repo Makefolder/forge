@@ -17,18 +17,38 @@
 package common
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+type DeployerType int
+
+const (
+	Dockerfile DeployerType = iota
+	DockerCompose
+	Kubernetes
+	Podman
+	Buildah
+	UnknownContainerTool
+)
+
+const getAllDirNames int = -1
+
+var deployerSignatures = map[DeployerType]string{
+	Dockerfile:    "Dockerfile",
+	DockerCompose: "docker-compose",
+}
 
 func IsOK(res *http.Response) bool {
 	return res != nil &&
 		res.StatusCode >= http.StatusOK && res.StatusCode < http.StatusMultipleChoices
 }
 
-func IsDirEmpty(dirname string) (bool, error) {
-	entries, err := os.ReadDir(dirname)
+func IsDirEmpty(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return false, err
 	}
@@ -36,13 +56,14 @@ func IsDirEmpty(dirname string) (bool, error) {
 }
 
 func CleanDir(dir string) error {
+	var err error
 	d, err := os.Open(dir)
 	if err != nil {
 		return err
 	}
 	defer d.Close()
 
-	names, err := d.Readdirnames(-1)
+	names, err := d.Readdirnames(getAllDirNames)
 	if err != nil {
 		return err
 	}
@@ -54,4 +75,30 @@ func CleanDir(dir string) error {
 		}
 	}
 	return nil
+}
+
+func GetDeployerType(dir string) (DeployerType, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return UnknownContainerTool, err
+	}
+
+	if len(entries) == 0 {
+		return UnknownContainerTool, fmt.Errorf("no entries found in %s", dir)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+
+		for deployer, pattern := range deployerSignatures {
+			if strings.Contains(name, pattern) {
+				return deployer, nil
+			}
+		}
+	}
+
+	return UnknownContainerTool, nil
 }

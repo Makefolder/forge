@@ -57,6 +57,7 @@ func (o *Observer) Observe(ctx context.Context, u *url.URL) error {
 	if u == nil {
 		return errors.New("URL cannot be nil")
 	}
+	slog.Info("observer started", "url", u.String())
 	slog.Debug("observing...")
 	for {
 		select {
